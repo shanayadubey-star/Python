@@ -1,0 +1,570 @@
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
+# ==========================================
+# PYTHON DYNAMIC BILLING SYSTEM
+# ==========================================
+
+products = {}
+cart = []
+invoice_history = []
+
+next_product_id = 1
+next_invoice_id = 1001
+
+
+# ==========================================
+# INPUT VALIDATION
+# ==========================================
+
+def get_text(prompt):
+    while True:
+        value = input(prompt).strip()
+
+        if value:
+            return value
+
+        print("Input cannot be empty.")
+
+
+def get_number(prompt, minimum=Decimal("0")):
+    while True:
+        try:
+            value = Decimal(input(prompt).strip())
+
+            if not value.is_finite() or value < minimum:
+                print(f"Enter a valid number >= {minimum}.")
+                continue
+
+            return value.quantize(Decimal("0.01"))
+
+        except InvalidOperation:
+            print("Invalid amount. Try again.")
+
+
+def get_integer(prompt, minimum=1):
+    while True:
+        try:
+            value = int(input(prompt))
+
+            if value < minimum:
+                print(f"Enter a value >= {minimum}.")
+                continue
+
+            return value
+
+        except ValueError:
+            print("Enter a valid whole number.")
+
+
+def get_percentage(prompt):
+    while True:
+        value = get_number(prompt)
+
+        if value <= 100:
+            return value
+
+        print("Percentage cannot exceed 100.")
+
+
+# ==========================================
+# PRODUCT MANAGEMENT
+# ==========================================
+
+def add_product():
+    global next_product_id
+
+    print("\n--- ADD PRODUCT ---")
+
+    name = get_text("Product name: ")
+    price = get_number(
+        "Product price (₹): ",
+        Decimal("0.01")
+    )
+
+    products[next_product_id] = {
+        "name": name,
+        "price": price
+    }
+
+    print(f"Product added! Product ID: {next_product_id}")
+
+    next_product_id += 1
+
+
+def view_products():
+    print("\n--- PRODUCT LIST ---")
+
+    if not products:
+        print("No products available.")
+        return
+
+    print("-" * 60)
+    print(f"{'ID':<10}{'PRODUCT':<30}{'PRICE':>15}")
+    print("-" * 60)
+
+    for pid, product in products.items():
+        print(
+            f"{pid:<10}"
+            f"{product['name'][:30]:<30}"
+            f"{product['price']:>15.2f}"
+        )
+
+    print("-" * 60)
+
+
+def update_product():
+    view_products()
+
+    if not products:
+        return
+
+    pid = get_integer("Enter product ID: ")
+
+    if pid not in products:
+        print("Product not found.")
+        return
+
+    product = products[pid]
+
+    name = input(
+        f"New name [{product['name']}]: "
+    ).strip()
+
+    price = input(
+        f"New price [{product['price']}]: "
+    ).strip()
+
+    if price:
+        try:
+            new_price = Decimal(price)
+
+            if not new_price.is_finite() or new_price <= 0:
+                print("Price must be greater than zero.")
+                return
+
+            product["price"] = new_price.quantize(
+                Decimal("0.01")
+            )
+
+        except InvalidOperation:
+            print("Invalid price.")
+            return
+
+    if name:
+        product["name"] = name
+
+    # Existing cart items retain their original price.
+    print("Product updated successfully!")
+
+
+def delete_product():
+    view_products()
+
+    if not products:
+        return
+
+    pid = get_integer("Enter product ID: ")
+
+    if pid not in products:
+        print("Product not found.")
+        return
+
+    if any(item["id"] == pid for item in cart):
+        print("Cannot delete: product is currently in the cart.")
+        return
+
+    confirm = input("Confirm delete? (yes/no): ").lower()
+
+    if confirm == "yes":
+        del products[pid]
+        print("Product deleted successfully.")
+    else:
+        print("Deletion cancelled.")
+
+
+# ==========================================
+# CART MANAGEMENT
+# ==========================================
+
+def add_to_cart():
+    view_products()
+
+    if not products:
+        return
+
+    pid = get_integer("Enter product ID: ")
+
+    if pid not in products:
+        print("Product not found.")
+        return
+
+    quantity = get_integer("Enter quantity: ")
+
+    for item in cart:
+        if item["id"] == pid:
+            item["quantity"] += quantity
+            print("Cart quantity updated.")
+            return
+
+    product = products[pid]
+
+    cart.append({
+        "id": pid,
+        "name": product["name"],
+        "price": product["price"],
+        "quantity": quantity
+    })
+
+    print("Product added to cart!")
+
+
+def view_cart():
+    if not cart:
+        print("\nCart is empty.")
+        return
+
+    print("\n--- SHOPPING CART ---")
+    print("-" * 65)
+
+    print(
+        f"{'PRODUCT':<25}"
+        f"{'PRICE':>12}"
+        f"{'QTY':>8}"
+        f"{'AMOUNT':>15}"
+    )
+
+    print("-" * 65)
+
+    total = Decimal("0.00")
+
+    for item in cart:
+        amount = item["price"] * item["quantity"]
+        total += amount
+
+        print(
+            f"{item['name'][:25]:<25}"
+            f"{item['price']:>12.2f}"
+            f"{item['quantity']:>8}"
+            f"{amount:>15.2f}"
+        )
+
+    print("-" * 65)
+    print(f"{'CART TOTAL':>50}: ₹{total:.2f}")
+
+
+def update_cart():
+    view_cart()
+
+    if not cart:
+        return
+
+    pid = get_integer("Enter product ID to update: ")
+
+    for item in cart:
+        if item["id"] == pid:
+
+            quantity = get_integer(
+                "Enter new quantity (0 to remove): ",
+                minimum=0
+            )
+
+            if quantity == 0:
+                cart.remove(item)
+                print("Product removed.")
+            else:
+                item["quantity"] = quantity
+                print("Quantity updated.")
+
+            return
+
+    print("Product not found in cart.")
+
+
+def remove_from_cart():
+    view_cart()
+
+    if not cart:
+        return
+
+    pid = get_integer("Enter product ID to remove: ")
+
+    for item in cart:
+        if item["id"] == pid:
+            cart.remove(item)
+            print("Product removed from cart.")
+            return
+
+    print("Product not found.")
+
+
+# ==========================================
+# BILL CALCULATION
+# ==========================================
+
+def calculate_bill(discount_percent, gst_percent):
+
+    subtotal = sum(
+        item["price"] * item["quantity"]
+        for item in cart
+    )
+
+    discount = (
+        subtotal * discount_percent / Decimal("100")
+    )
+
+    taxable_amount = subtotal - discount
+
+    gst_amount = (
+        taxable_amount * gst_percent / Decimal("100")
+    )
+
+    total = taxable_amount + gst_amount
+
+    return {
+        "subtotal": subtotal,
+        "discount": discount,
+        "taxable_amount": taxable_amount,
+        "gst": gst_amount,
+        "total": total
+    }
+
+
+# ==========================================
+# INVOICE GENERATION
+# ==========================================
+
+def generate_invoice():
+
+    global next_invoice_id
+
+    if not cart:
+        print("Cart is empty!")
+        return
+
+    print("\n--- CUSTOMER DETAILS ---")
+
+    customer = {
+        "name": get_text("Customer name: "),
+        "phone": get_text("Customer phone: ")
+    }
+
+    discount_percent = get_percentage(
+        "Discount percentage: "
+    )
+
+    gst_percent = get_percentage(
+        "GST percentage: "
+    )
+
+    bill = calculate_bill(
+        discount_percent,
+        gst_percent
+    )
+
+    print(f"\nGrand Total: ₹{bill['total']:.2f}")
+
+    confirm = input(
+        "Confirm invoice generation? (yes/no): "
+    ).lower()
+
+    if confirm != "yes":
+        print("Invoice cancelled. Cart retained.")
+        return
+
+    invoice = {
+        "invoice_id": next_invoice_id,
+        "date": datetime.now().strftime(
+            "%d-%m-%Y %H:%M:%S"
+        ),
+        "customer": customer,
+        "items": [item.copy() for item in cart],
+        "discount_percent": discount_percent,
+        "gst_percent": gst_percent,
+        **bill
+    }
+
+    invoice_history.append(invoice)
+
+    print_invoice(invoice)
+
+    cart.clear()
+    next_invoice_id += 1
+
+
+def print_invoice(invoice):
+
+    print("\n")
+    print("=" * 70)
+    print(" " * 25 + "CUSTOMER INVOICE")
+    print("=" * 70)
+
+    print(f"Invoice Number : {invoice['invoice_id']}")
+    print(f"Date           : {invoice['date']}")
+    print(f"Customer       : {invoice['customer']['name']}")
+    print(f"Phone          : {invoice['customer']['phone']}")
+
+    print("-" * 70)
+
+    print(
+        f"{'PRODUCT':<25}"
+        f"{'PRICE':>12}"
+        f"{'QTY':>8}"
+        f"{'AMOUNT':>15}"
+    )
+
+    print("-" * 70)
+
+    for item in invoice["items"]:
+
+        amount = item["price"] * item["quantity"]
+
+        print(
+            f"{item['name'][:25]:<25}"
+            f"{item['price']:>12.2f}"
+            f"{item['quantity']:>8}"
+            f"{amount:>15.2f}"
+        )
+
+    print("-" * 70)
+
+    print(f"{'Subtotal':>55}: ₹{invoice['subtotal']:.2f}")
+    print(
+        f"{'Discount':>55}: ₹{invoice['discount']:.2f}"
+    )
+    print(
+        f"{'Taxable Amount':>55}: ₹{invoice['taxable_amount']:.2f}"
+    )
+    print(
+        f"{'GST (' + str(invoice['gst_percent']) + '%)':>55}: "
+        f"₹{invoice['gst']:.2f}"
+    )
+
+    print("=" * 70)
+
+    print(
+        f"{'GRAND TOTAL':>55}: "
+        f"₹{invoice['total']:.2f}"
+    )
+
+    print("=" * 70)
+    print(" " * 25 + "THANK YOU!")
+    print("=" * 70)
+
+
+# ==========================================
+# INVOICE HISTORY
+# ==========================================
+
+def view_invoice_history():
+
+    if not invoice_history:
+        print("\nNo invoice history available.")
+        return
+
+    print("\n--- INVOICE HISTORY ---")
+    print("-" * 70)
+
+    for invoice in invoice_history:
+
+        print(
+            f"Invoice: {invoice['invoice_id']} | "
+            f"Customer: {invoice['customer']['name']} | "
+            f"Date: {invoice['date']} | "
+            f"Total: ₹{invoice['total']:.2f}"
+        )
+
+    print("-" * 70)
+
+
+# ==========================================
+# MAIN MENU
+# ==========================================
+
+def main():
+
+    while True:
+
+        print("\n")
+        print("=" * 45)
+        print("          PYTHON BILLING SYSTEM")
+        print("=" * 45)
+
+        print("1.  Add Product")
+        print("2.  View Products")
+        print("3.  Update Product")
+        print("4.  Delete Product")
+        print("-" * 45)
+        print("5.  Add Product to Cart")
+        print("6.  View Cart")
+        print("7.  Update Cart")
+        print("8.  Remove Product from Cart")
+        print("9.  Generate Invoice")
+        print("-" * 45)
+        print("10. View Invoice History")
+        print("11. Exit")
+        print("=" * 45)
+
+        choice = input("Enter your choice: ").strip()
+
+        try:
+
+            if choice == "1":
+                add_product()
+
+            elif choice == "2":
+                view_products()
+
+            elif choice == "3":
+                update_product()
+
+            elif choice == "4":
+                delete_product()
+
+            elif choice == "5":
+                add_to_cart()
+
+            elif choice == "6":
+                view_cart()
+
+            elif choice == "7":
+                update_cart()
+
+            elif choice == "8":
+                remove_from_cart()
+
+            elif choice == "9":
+                generate_invoice()
+
+            elif choice == "10":
+                view_invoice_history()
+
+            elif choice == "11":
+
+                if cart:
+                    confirm = input(
+                        "Cart contains unbilled items. Exit? (yes/no): "
+                    ).lower()
+
+                    if confirm != "yes":
+                        continue
+
+                print("\nThank you for using Billing System!")
+                break
+
+            else:
+                print("Invalid choice. Select 1 to 11.")
+
+        except (KeyboardInterrupt, EOFError):
+            print("\nOperation interrupted. Returning to menu.")
+
+        except Exception as error:
+            print(f"Unexpected error: {error}")
+
+
+# ==========================================
+# APPLICATION ENTRY POINT
+# ==========================================
+
+if __name__ == "__main__":
+    main()
